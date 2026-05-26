@@ -2,15 +2,14 @@
   "name": "b2b-price-editor",
   "private": true,
   "scripts": {
-    "build": "remix vite:build",
+    "build": "npx --no-install remix vite:build",
     "dev": "shopify app dev",
-    "start": "remix-serve ./build/server/index.js",
-    "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
+    "start": "npx --no-install remix-serve ./build/server/index.js",
     "typecheck": "tsc --noEmit"
   },
   "type": "module",
   "engines": {
-    "node": ">=18.20.4"
+    "node": "20.x"
   },
   "dependencies": {
     "@remix-run/node": "^2.10.0",
