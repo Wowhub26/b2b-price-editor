@@ -2,9 +2,9 @@
   "name": "b2b-price-editor",
   "private": true,
   "scripts": {
-    "build": "npx --no-install remix vite:build",
+    "build": "remix vite:build",
     "dev": "shopify app dev",
-    "start": "npx --no-install remix-serve ./build/server/index.js",
+    "start": "remix-serve ./build/server/index.js",
     "typecheck": "tsc --noEmit"
   },
   "type": "module",

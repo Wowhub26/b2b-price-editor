@@ -13,7 +13,7 @@ services:
     plan: starter              # $7/mese — sufficiente per uso interno
     branch: main
 
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
 
     # Health check — Render verifica che l'app risponda

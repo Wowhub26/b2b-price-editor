@@ -53,7 +53,8 @@ export async function loader({ request: _request }: LoaderFunctionArgs) {
 // COMPONENT — Step 1: Selezione catalogo
 // ============================================================
 export default function Step1SelectCatalog() {
-  const { catalogs, error } = useLoaderData<typeof loader>();
+  const { catalogs: loaderCatalogs, error } = useLoaderData<typeof loader>();
+  const catalogs = loaderCatalogs.filter(Boolean) as ShopifyCatalog[];
   const navigate = useNavigate();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -169,7 +170,6 @@ export default function Step1SelectCatalog() {
                             isSelected ? null : catalog.id
                           )
                         }
-                        selected={isSelected}
                       >
                         <InlineStack
                           align="space-between"

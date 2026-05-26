@@ -80,7 +80,7 @@ L'app si avvia su `http://localhost:3000`.
 1. Pusha il codice su GitHub
 2. Su [render.com](https://render.com) → **New Web Service** → connetti repo
 3. Impostazioni:
-   - **Build Command**: `npm install && npm run build`
+   - **Build Command**: `npm install --include=dev && npm run build`
    - **Start Command**: `npm run start`
    - **Node Version**: `20`
 4. Aggiungi tutte le variabili da `.env.example` nella sezione **Environment**

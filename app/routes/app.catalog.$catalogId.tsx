@@ -430,16 +430,18 @@ export default function Step2BulkEditor() {
     setShowSaveModal(false);
     setSaveResult(null);
 
-    fetcher.submit(
-      {
-        priceListId,
-        currency: catalog.priceList!.currency,
-        catalogId: catalog.id,
-        catalogName: catalog.title,
-        modifiedRows,
-      } as unknown as SaveActionPayload,
-      { method: "POST", encType: "application/json" }
-    );
+    const payload: SaveActionPayload = {
+      priceListId,
+      currency: catalog.priceList!.currency,
+      catalogId: catalog.id,
+      catalogName: catalog.title,
+      modifiedRows,
+    };
+
+    fetcher.submit(payload as unknown as Parameters<typeof fetcher.submit>[0], {
+      method: "POST",
+      encType: "application/json",
+    });
   }, [modifiedRows, catalog, priceListId, fetcher]);
 
   // ---- Render tabella ----
@@ -828,13 +830,12 @@ export default function Step2BulkEditor() {
                       ? `Deseleziona tutti (${filteredRows.length})`
                       : `Seleziona tutti (${filteredRows.length})`
                   }
-                  checked={allSelected}
-                  indeterminate={someSelected}
+                  checked={someSelected ? "indeterminate" : allSelected}
                   onChange={toggleSelectAll}
                 />
                 {modifiedRows.length > 0 && (
                   <Badge tone="attention">
-                    {modifiedRows.length} modificat{modifiedRows.length === 1 ? "a" : "e"}
+                    {`${modifiedRows.length} modificat${modifiedRows.length === 1 ? "a" : "e"}`}
                   </Badge>
                 )}
                 {hasErrors && (

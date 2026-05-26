@@ -6,8 +6,46 @@
 import { createClient } from "@supabase/supabase-js";
 import type { BulkSaveResult } from "~/types";
 
+type Database = {
+  public: {
+    Tables: {
+      save_logs: {
+        Row: { id: string };
+        Insert: {
+          catalog_id: string;
+          catalog_name: string;
+          price_list_id: string;
+          total_modified: number;
+          total_saved: number;
+          total_errors: number;
+          total_skipped: number;
+          duration_ms: number;
+          status: "success" | "partial" | "failed";
+        };
+        Update: Partial<Database["public"]["Tables"]["save_logs"]["Insert"]>;
+        Relationships: [];
+      };
+      error_logs: {
+        Row: { id: string };
+        Insert: {
+          save_log_id: string;
+          variant_id: string;
+          sku: string | null;
+          error_message: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["error_logs"]["Insert"]>;
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
 // Lazy singleton — evita di creare il client ad ogni richiesta
-let _supabase: ReturnType<typeof createClient> | null = null;
+let _supabase: ReturnType<typeof createClient<Database>> | null = null;
 
 function getSupabase() {
   if (!_supabase) {
@@ -20,7 +58,7 @@ function getSupabase() {
       );
     }
 
-    _supabase = createClient(url, key, {
+    _supabase = createClient<Database>(url, key, {
       auth: {
         // La service_role key non usa session — disabilita persistenza
         persistSession: false,
