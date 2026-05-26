@@ -1,51 +1,56 @@
-// ============================================================
-// STEP 1 — Selezione catalogo B2B
-// Il loader usa authenticate.admin(request) per ottenere
-// il client GraphQL autenticato OAuth — nessun token fisso.
-// ============================================================
-
 import { useState, useCallback } from "react";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import {
-  Page, Layout, Card, ResourceList, ResourceItem,
-  Text, Badge, Button, TextField, EmptyState, Banner,
-  BlockStack, InlineStack, Spinner, Box,
+  Page,
+  Layout,
+  Card,
+  ResourceList,
+  ResourceItem,
+  Text,
+  Badge,
+  Button,
+  TextField,
+  EmptyState,
+  Banner,
+  BlockStack,
+  InlineStack,
+  Spinner,
+  Box,
 } from "@shopify/polaris";
-
-import shopify, { fetchAllPages } from "~/lib/shopify.server";
+import { shopifyGraphQL, fetchAllPages } from "~/lib/shopify.server";
 import { GET_B2B_CATALOGS } from "~/lib/graphql/queries";
 import type { ShopifyCatalog } from "~/types";
 
 // ============================================================
-// LOADER
+// LOADER — Recupera tutti i cataloghi B2B
 // ============================================================
-export async function loader({ request }: LoaderFunctionArgs) {
-  // Autentica la richiesta OAuth e ottiene il client GraphQL
-  const { admin } = await shopify.authenticate.admin(request);
-
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   try {
     const catalogs = await fetchAllPages<ShopifyCatalog>(
       async (first, after) => {
-        const response = await admin.graphql(GET_B2B_CATALOGS, {
-          variables: { first, after },
-        });
-        const json = await response.json();
-        return json.data.catalogs;
+        const data = await shopifyGraphQL<{
+          catalogs: {
+            pageInfo: { hasNextPage: boolean; endCursor: string };
+            nodes: ShopifyCatalog[];
+          };
+        }>(GET_B2B_CATALOGS, { first, after });
+        return data.catalogs;
       },
-      50
+      50 // 50 cataloghi per pagina
     );
 
     return json({ catalogs, error: null });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Errore sconosciuto";
+    const message =
+      err instanceof Error ? err.message : "Errore sconosciuto";
     console.error("[Step1 Loader]", message);
-    return json({ catalogs: [] as ShopifyCatalog[], error: message });
+    return json({ catalogs: [], error: message });
   }
 }
 
 // ============================================================
-// COMPONENT
+// COMPONENT — Step 1: Selezione catalogo
 // ============================================================
 export default function Step1SelectCatalog() {
   const { catalogs, error } = useLoaderData<typeof loader>();
@@ -55,10 +60,10 @@ export default function Step1SelectCatalog() {
   const [search, setSearch] = useState("");
   const [isNavigating, setIsNavigating] = useState(false);
 
+  // Catalogo attualmente selezionato
   const selectedCatalog = catalogs.find((c) => c.id === selectedId);
-  const hasPriceList = !!selectedCatalog?.priceList;
-  const canContinue = !!selectedId && hasPriceList && !isNavigating;
 
+  // Filtra per ricerca testuale
   const filteredCatalogs = catalogs.filter((c) => {
     const q = search.toLowerCase();
     return (
@@ -69,10 +74,15 @@ export default function Step1SelectCatalog() {
     );
   });
 
+  const hasPriceList = !!selectedCatalog?.priceList;
+  const canContinue = !!selectedId && hasPriceList && !isNavigating;
+
   const handleContinue = useCallback(() => {
     if (!selectedId || !hasPriceList) return;
     setIsNavigating(true);
-    navigate(`/app/catalog/${encodeURIComponent(selectedId)}`);
+    // Encode per gestire GID con slash e caratteri speciali
+    const encoded = encodeURIComponent(selectedId);
+    navigate(`/app/catalog/${encoded}`);
   }, [selectedId, hasPriceList, navigate]);
 
   return (
@@ -81,18 +91,27 @@ export default function Step1SelectCatalog() {
       subtitle="Scegli il catalogo B2B di cui vuoi modificare i prezzi in bulk."
     >
       <Layout>
+        {/* Errore di caricamento */}
         {error && (
           <Layout.Section>
-            <Banner tone="critical" title="Errore nel caricamento dei cataloghi">
+            <Banner
+              tone="critical"
+              title="Errore nel caricamento dei cataloghi"
+            >
               <p>{error}</p>
-              <p>Verifica che l&apos;app sia installata correttamente nello store e che abbia gli scopes necessari.</p>
+              <p>
+                Verifica che <code>SHOPIFY_ACCESS_TOKEN</code> e{" "}
+                <code>SHOP</code> siano corretti nel file <code>.env</code>.
+              </p>
             </Banner>
           </Layout.Section>
         )}
 
+        {/* Lista cataloghi */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
+              {/* Barra di ricerca */}
               <TextField
                 label="Cerca catalogo"
                 value={search}
@@ -103,15 +122,21 @@ export default function Step1SelectCatalog() {
                 onClearButtonClick={() => setSearch("")}
               />
 
+              {/* Stato vuoto */}
               {!error && catalogs.length === 0 && (
-                <EmptyState heading="Nessun catalogo B2B trovato" image="">
+                <EmptyState
+                  heading="Nessun catalogo B2B trovato"
+                  image=""
+                >
                   <p>
                     Assicurati che lo store Shopify Plus abbia cataloghi B2B
-                    attivi (CompanyLocationCatalog).
+                    attivi (CompanyLocationCatalog) e che l&apos;app abbia lo
+                    scope <code>read_products</code>.
                   </p>
                 </EmptyState>
               )}
 
+              {/* Nessun risultato dalla ricerca */}
               {catalogs.length > 0 && filteredCatalogs.length === 0 && (
                 <Box padding="400">
                   <Text as="p" tone="subdued" alignment="center">
@@ -120,6 +145,7 @@ export default function Step1SelectCatalog() {
                 </Box>
               )}
 
+              {/* Lista */}
               {filteredCatalogs.length > 0 && (
                 <ResourceList
                   resourceName={{ singular: "catalogo", plural: "cataloghi" }}
@@ -127,81 +153,120 @@ export default function Step1SelectCatalog() {
                   selectedItems={selectedId ? [selectedId] : []}
                   onSelectionChange={(ids) => {
                     if (ids === "All") return;
-                    const arr = ids as string[];
-                    setSelectedId(arr[arr.length - 1] ?? null);
+                    const idArray = ids as string[];
+                    setSelectedId(idArray[idArray.length - 1] ?? null);
                   }}
                   selectable
-                  renderItem={(catalog: ShopifyCatalog) => (
-                    <ResourceItem
-                      id={catalog.id}
-                      onClick={() =>
-                        setSelectedId(
-                          catalog.id === selectedId ? null : catalog.id
-                        )
-                      }
-                      selected={catalog.id === selectedId}
-                    >
-                      <InlineStack align="space-between" blockAlign="center" wrap={false}>
-                        <BlockStack gap="100">
-                          <Text variant="bodyMd" fontWeight="semibold" as="span">
-                            {catalog.title}
-                          </Text>
-                          {catalog.companyLocation && (
-                            <Text variant="bodySm" tone="subdued" as="p">
-                              🏢 {catalog.companyLocation.company.name} —{" "}
-                              {catalog.companyLocation.name}
+                  renderItem={(catalog: ShopifyCatalog) => {
+                    const isSelected = catalog.id === selectedId;
+                    const hasPL = !!catalog.priceList;
+
+                    return (
+                      <ResourceItem
+                        id={catalog.id}
+                        onClick={() =>
+                          setSelectedId(
+                            isSelected ? null : catalog.id
+                          )
+                        }
+                        selected={isSelected}
+                      >
+                        <InlineStack
+                          align="space-between"
+                          blockAlign="center"
+                          wrap={false}
+                        >
+                          {/* Info catalogo */}
+                          <BlockStack gap="100">
+                            <Text
+                              variant="bodyMd"
+                              fontWeight="semibold"
+                              as="span"
+                            >
+                              {catalog.title}
                             </Text>
-                          )}
-                          {catalog.priceList ? (
-                            <Text variant="bodySm" tone="subdued" as="p">
-                              💰 {catalog.priceList.name} ({catalog.priceList.currency})
-                            </Text>
-                          ) : (
-                            <Text variant="bodySm" tone="critical" as="p">
-                              ⚠️ Nessuna Price List collegata
-                            </Text>
-                          )}
-                        </BlockStack>
-                        <InlineStack gap="200">
-                          <Badge
-                            tone={
-                              catalog.status === "ACTIVE" ? "success"
-                              : catalog.status === "DRAFT" ? "attention"
-                              : "critical"
-                            }
-                          >
-                            {catalog.status}
-                          </Badge>
-                          {!catalog.priceList && (
-                            <Badge tone="critical">No Price List</Badge>
-                          )}
+
+                            {catalog.companyLocation && (
+                              <Text
+                                variant="bodySm"
+                                tone="subdued"
+                                as="p"
+                              >
+                                🏢 {catalog.companyLocation.company.name}
+                                {" — "}
+                                {catalog.companyLocation.name}
+                              </Text>
+                            )}
+
+                            {catalog.priceList ? (
+                              <Text variant="bodySm" tone="subdued" as="p">
+                                💰 Price List:{" "}
+                                <strong>{catalog.priceList.name}</strong>{" "}
+                                ({catalog.priceList.currency})
+                              </Text>
+                            ) : (
+                              <Text
+                                variant="bodySm"
+                                tone="critical"
+                                as="p"
+                              >
+                                ⚠️ Nessuna Price List collegata
+                              </Text>
+                            )}
+                          </BlockStack>
+
+                          {/* Badge stato */}
+                          <InlineStack gap="200">
+                            <Badge
+                              tone={
+                                catalog.status === "ACTIVE"
+                                  ? "success"
+                                  : catalog.status === "DRAFT"
+                                  ? "attention"
+                                  : "critical"
+                              }
+                            >
+                              {catalog.status}
+                            </Badge>
+                            {!hasPL && (
+                              <Badge tone="critical">No Price List</Badge>
+                            )}
+                          </InlineStack>
                         </InlineStack>
-                      </InlineStack>
-                    </ResourceItem>
-                  )}
+                      </ResourceItem>
+                    );
+                  }}
                 />
               )}
             </BlockStack>
           </Card>
         </Layout.Section>
 
+        {/* Avviso se catalogo senza price list */}
         {selectedId && !hasPriceList && (
           <Layout.Section>
-            <Banner tone="critical" title="Il catalogo non ha una Price List">
+            <Banner
+              tone="critical"
+              title="Il catalogo selezionato non ha una Price List"
+            >
               <p>
-                Vai in Shopify Admin → B2B → Cataloghi → {selectedCatalog?.title}{" "}
-                e associa una Price List prima di continuare.
+                Per modificare i prezzi B2B, il catalogo deve avere una Price
+                List associata. Vai in Shopify Admin → B2B → Cataloghi →{" "}
+                {selectedCatalog?.title} e aggiungi una Price List.
               </p>
             </Banner>
           </Layout.Section>
         )}
 
+        {/* Pulsante continua */}
         <Layout.Section>
           <InlineStack align="end">
             {isNavigating ? (
               <InlineStack gap="200" blockAlign="center">
                 <Spinner size="small" />
-                <Text as="span" tone="subdued">Caricamento...</Text>
+                <Text as="span" tone="subdued">
+                  Caricamento catalogo...
+                </Text>
               </InlineStack>
             ) : (
               <Button
@@ -218,12 +283,14 @@ export default function Step1SelectCatalog() {
           </InlineStack>
         </Layout.Section>
 
+        {/* Footer info */}
         {catalogs.length > 0 && (
           <Layout.Section>
             <Text as="p" tone="subdued" alignment="center">
-              {catalogs.length} catalog{catalogs.length !== 1 ? "hi" : "o"} B2B
+              {catalogs.length} catalogo{catalogs.length !== 1 ? "hi" : ""}{" "}
+              B2B trovato{catalogs.length !== 1 ? "i" : ""}
               {filteredCatalogs.length !== catalogs.length &&
-                ` — ${filteredCatalogs.length} mostrat${filteredCatalogs.length !== 1 ? "i" : "o"}`}
+                ` — ${filteredCatalogs.length} mostrato${filteredCatalogs.length !== 1 ? "i" : ""}`}
             </Text>
           </Layout.Section>
         )}

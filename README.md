@@ -1,139 +1,192 @@
 # B2B Price Editor — WowHub SRL
 
-App Shopify custom per la modifica bulk dei prezzi B2B.
-Usa OAuth moderno (Partners Dashboard) — nessun token fisso.
+App Shopify custom per la modifica bulk dei prezzi B2B tramite cataloghi e price list.
+
+Sviluppata per Shopify Plus con B2B abilitato.
 
 ---
 
 ## Stack
 
-- **Remix** + **Node.js 20** + **TypeScript**
-- **Shopify Polaris** (UI)
-- **@shopify/shopify-app-remix** (OAuth, sessioni, GraphQL)
-- **Supabase** (sessioni OAuth + log operazioni)
-- **Render** (deploy, piano free)
+- **Runtime**: Node.js 20+
+- **Framework**: Remix (Shopify App Template)
+- **UI**: Shopify Polaris
+- **Database**: Supabase (PostgreSQL) — per log operazioni
+- **Deploy**: Render
+- **API**: Shopify Admin GraphQL API 2026-01
 
 ---
 
-## Come funziona l'autenticazione
+## Setup iniziale
 
-A differenza delle legacy app con token fisso, questa app usa **OAuth standard**:
+### 1. Clona il repo
 
+```bash
+git clone https://github.com/wowhub-srl/b2b-price-editor.git
+cd b2b-price-editor
+npm install
 ```
-1. Merchant apre l'app da Shopify Admin
-2. Shopify reindirizza a /auth su Render
-3. L'app completa il flow OAuth
-4. Il token viene salvato su Supabase (tabella shopify_sessions)
-5. Ogni richiesta successiva usa il token salvato
-```
 
-Non c'è `SHOPIFY_ACCESS_TOKEN` nel `.env` — il token viene gestito automaticamente.
-
----
-
-## Setup
-
-### 1. Supabase
-
-1. Crea progetto su [supabase.com](https://supabase.com) → regione **eu-west** (Frankfurt)
-2. SQL Editor → incolla `supabase/schema.sql` → **Run**
-3. Copia da Settings → API:
-   - **Project URL** → `SUPABASE_URL`
-   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (NON la anon key)
-
-### 2. Partners Dashboard
-
-1. [partners.shopify.com](https://partners.shopify.com) → Apps → **B2B Price Editor**
-2. API credentials → copia:
-   - **Client ID** → `SHOPIFY_API_KEY`
-   - **Client secret** → `SHOPIFY_API_SECRET`
-3. App setup → **App URL**: `https://b2b-price-editor.onrender.com`
-4. **Allowed redirection URLs**: `https://b2b-price-editor.onrender.com/auth/callback`
-
-### 3. Render
-
-1. Push il repo su GitHub
-2. render.com → **New Blueprint** → seleziona repo
-3. Render legge `render.yaml` e chiede i valori `sync: false`:
-   - `SHOPIFY_API_KEY` → Client ID
-   - `SHOPIFY_API_SECRET` → Client secret
-   - `SHOPIFY_APP_URL` → `https://b2b-price-editor.onrender.com`
-   - `SUPABASE_URL` → URL del progetto Supabase
-   - `SUPABASE_SERVICE_ROLE_KEY` → service_role key
-4. `SESSION_SECRET` viene generato automaticamente da Render
-
-### 4. Installa l'app nello store
-
-1. Partners Dashboard → Apps → B2B Price Editor → **Test on development store** oppure
-2. Installa come custom app da: `https://b2b-price-editor.onrender.com?shop=your-store.myshopify.com`
-
----
-
-## Sviluppo locale
+### 2. Configura le variabili d'ambiente
 
 ```bash
 cp .env.example .env
-# Compila .env
-
-npm install
-npm run dev
-# Shopify CLI avvia un tunnel ngrok automaticamente
 ```
+
+Modifica `.env` con i tuoi dati reali:
+
+```env
+SHOPIFY_API_KEY=...          # Client ID dal Partners Dashboard
+SHOPIFY_API_SECRET=...       # Client Secret dal Partners Dashboard
+SHOPIFY_ACCESS_TOKEN=shpat_... # Token generato in Shopify Admin
+SHOP=your-store.myshopify.com
+SHOPIFY_API_VERSION=2026-01
+
+SUPABASE_URL=https://....supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+SESSION_SECRET=stringa-random-32-caratteri
+```
+
+### 3. Setup Supabase
+
+1. Vai su [supabase.com](https://supabase.com) → progetto B2B Price Editor
+2. Apri **SQL Editor** → **New query**
+3. Incolla il contenuto di `supabase/schema.sql`
+4. Clicca **Run**
+
+### 4. Configura `shopify.app.toml`
+
+Sostituisci i placeholder:
+- `client_id` → il tuo Client ID dal Partners Dashboard
+- `dev_store_url` → il tuo store (.myshopify.com)
+- URL di produzione dopo il deploy su Render
+
+### 5. Avvia in locale
+
+```bash
+npm run dev
+```
+
+L'app si avvia su `http://localhost:3000`.
+
+> **Nota**: in sviluppo locale, Shopify CLI crea un tunnel per esporre l'app.
+> Assicurati di essere loggato con `shopify auth login`.
 
 ---
 
-## Struttura
+## Deploy su Render
+
+1. Pusha il codice su GitHub
+2. Su [render.com](https://render.com) → **New Web Service** → connetti repo
+3. Impostazioni:
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start`
+   - **Node Version**: `20`
+4. Aggiungi tutte le variabili da `.env.example` nella sezione **Environment**
+5. Dopo il deploy, copia l'URL e aggiornalo in:
+   - `shopify.app.toml` → `application_url` e `redirect_urls`
+   - Partners Dashboard → App setup → App URL
+
+---
+
+## Scopes Shopify necessari
+
+```
+read_products
+write_products
+read_publications
+write_publications
+```
+
+Configurati in `shopify.app.toml` → `[access_scopes]`.
+
+---
+
+## Struttura del progetto
 
 ```
 app/
 ├── routes/
-│   ├── auth.$.tsx                 # Callback OAuth Shopify
-│   ├── app.tsx                    # Layout protetto da OAuth
-│   ├── app._index.tsx             # Step 1: selezione catalogo
-│   └── app.catalog.$catalogId.tsx # Step 2: bulk editor
+│   ├── app.tsx                    # Layout con Frame Polaris
+│   ├── app._index.tsx             # Step 1: Selezione catalogo
+│   └── app.catalog.$catalogId.tsx # Step 2: Bulk editor
 ├── lib/
-│   ├── shopify.server.ts          # Config OAuth + helpers GraphQL
-│   ├── supabase.server.ts         # SessionStorage + log operazioni
-│   ├── batchUtils.ts              # Salvataggio bulk
-│   ├── priceUtils.ts              # Validazione prezzi
+│   ├── shopify.server.ts          # Client GraphQL Shopify
+│   ├── supabase.server.ts         # Client Supabase (solo server)
+│   ├── batchUtils.ts              # Salvataggio bulk con rate limits
+│   ├── priceUtils.ts              # Validazione e calcoli prezzi
 │   ├── csvUtils.ts                # Import/export CSV
 │   └── graphql/
-│       ├── queries.ts
-│       └── mutations.ts
-└── types/index.ts
+│       ├── queries.ts             # Query GraphQL
+│       └── mutations.ts           # Mutazioni GraphQL
+├── types/
+│   └── index.ts                   # TypeScript types condivisi
+└── root.tsx                       # Root layout Remix
 
 supabase/
-└── schema.sql                     # Sessioni OAuth + log bulk
-render.yaml                        # Deploy automatico Render (free)
+└── schema.sql                     # Schema database
 ```
 
 ---
 
-## Variabili d'ambiente
+## Flusso dell'app
 
-| Variabile | Dove si trova | Obbligatoria |
-|---|---|---|
-| `SHOPIFY_API_KEY` | Partners Dashboard → Client ID | ✅ |
-| `SHOPIFY_API_SECRET` | Partners Dashboard → Client secret | ✅ |
-| `SHOPIFY_APP_URL` | URL Render dopo il deploy | ✅ |
-| `SCOPES` | Già nel render.yaml | ✅ |
-| `SUPABASE_URL` | Supabase → Settings → API | ✅ |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API | ✅ |
-| `SESSION_SECRET` | Generato da Render automaticamente | ✅ |
+```
+Step 1: Selezione catalogo B2B
+  ↓ (click Continua)
+Step 2: Bulk editor
+  ├── Modifica prezzi manualmente cella per cella
+  ├── Importa CSV (preview in tabella — non salva)
+  ├── Azioni bulk su selezione multipla
+  └── Salva modifiche
+        ↓ (conferma modale)
+        Shopify: priceListFixedPricesUpdate (chunk da 250)
+        Supabase: log operazione
+        ↓
+        Riepilogo risultati
+```
 
-> ⚠️ **Non esiste più `SHOPIFY_ACCESS_TOKEN`** — il token OAuth viene salvato su Supabase dopo l'installazione.
+---
+
+## Note importanti
+
+- L'app **non modifica mai** i prezzi standard dei prodotti Shopify
+- Agisce **solo** sui prezzi fissi nella price list B2B del catalogo selezionato
+- Il salvataggio avviene **solo** dopo conferma esplicita nella modale
+- L'import CSV popola la tabella ma **non salva** automaticamente
+
+---
+
+## API Shopify utilizzate
+
+| Operazione | API |
+|---|---|
+| Lista cataloghi B2B | `catalogs(type: COMPANY_LOCATION)` |
+| Dettaglio catalogo | `catalog(id)` |
+| Prezzi fissi price list | `priceList.prices` |
+| Prodotti e varianti | `products` |
+| Aggiornamento prezzi B2B | `priceListFixedPricesUpdate` |
 
 ---
 
 ## Checklist deploy
 
 ```
-[ ] Supabase: schema.sql eseguito, tabelle shopify_sessions e save_logs visibili
-[ ] Partners Dashboard: App URL e redirect URL aggiornati con URL Render
-[ ] Render: Blueprint deployato, tutte le env vars compilate
-[ ] App installata nello store (OAuth completato)
-[ ] Test: lista cataloghi B2B visibile
-[ ] Test: modifica e salvataggio prezzo funzionante
+[ ] .env compilato con tutti i valori
+[ ] Supabase: schema.sql eseguito, tabelle visibili
+[ ] shopify.app.toml: client_id e URL aggiornati
+[ ] Render: deploy riuscito
+[ ] Partners Dashboard: URL app aggiornato
+[ ] Test: lista cataloghi visibile
+[ ] Test: modifica e salvataggio prezzo
 [ ] Test: prezzo standard Shopify NON modificato
-[ ] Test: log in Supabase → tabella save_logs
+[ ] Test: log su Supabase (tabella save_logs)
 ```
+
+---
+
+## Supporto
+
+WowHub SRL — sviluppo interno  
+Per problemi con le API Shopify B2B: [shopify.dev/docs/apps/build/b2b](https://shopify.dev/docs/apps/build/b2b)
