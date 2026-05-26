@@ -10,7 +10,7 @@ services:
     name: b2b-price-editor
     runtime: node
     region: frankfurt          # EU West — vicino all'Italia, GDPR friendly
-    plan: starter              # $7/mese — sufficiente per uso interno
+    plan: free                 # Piano gratuito Render
     branch: main
 
     buildCommand: npm install && npm run build
